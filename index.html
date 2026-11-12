@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Ki Racers — Grand Prix des Sept Orbes</title>
+<style>
+  :root { --o: #ff8a1c; --y: #ffd83a; --b: #48d8ff; --ink: #14121c; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1020; color: #fff; font-family: 'Arial Black', Impact, 'Segoe UI', system-ui, sans-serif; user-select: none; -webkit-user-select: none; touch-action: none; }
+  canvas#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .ink { -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; text-shadow: 3px 3px 0 var(--ink); font-style: italic; }
+  #hud { position: fixed; inset: 0; pointer-events: none; display: none; padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
+  #pos { position: absolute; left: 16px; bottom: 14px; font-size: clamp(54px, 11vw, 110px); line-height: .9; color: var(--y); }
+  #pos small { font-size: .32em; color: #fff; margin-left: 4px; }
+  #lapbox { position: absolute; left: 16px; top: 12px; font-size: clamp(16px, 2.6vw, 26px); }
+  #lapbox b { color: var(--y); font-size: 1.35em; }
+  #time { font-size: .8em; opacity: .95; margin-top: 2px; font-family: ui-monospace, Menlo, monospace; font-weight: 700; font-style: normal; }
+  #orbs { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; padding: 6px 12px; background: rgba(10, 12, 30, .55); border: 2px solid rgba(255, 255, 255, .25); border-radius: 999px; }
+  #orbs i { width: clamp(16px, 2.6vw, 24px); height: clamp(16px, 2.6vw, 24px); border-radius: 50%; background: rgba(255, 255, 255, .12); border: 2px solid rgba(255, 255, 255, .3); position: relative; transition: transform .25s; }
+  #orbs i.on { background: radial-gradient(circle at 35% 30%, #fff6c8, #ffb22e 50%, #e06a00); border-color: #fff3c0; box-shadow: 0 0 12px #ffa020; transform: scale(1.15); }
+  #orbs i.on::after { content: '✦'; position: absolute; inset: 0; display: grid; place-items: center; font-size: 11px; color: #fffbe0; font-style: normal; }
+  #itembox { position: absolute; right: 16px; top: 12px; width: clamp(74px, 11vw, 104px); aspect-ratio: 1; border-radius: 18px; background: rgba(10, 12, 30, .6); border: 3px solid var(--b); display: grid; place-items: center; font-size: clamp(34px, 6vw, 54px); transform: skewX(-6deg); box-shadow: 0 0 18px rgba(72, 216, 255, .45); }
+  #itembox.has { border-color: var(--y); box-shadow: 0 0 24px rgba(255, 216, 58, .8); animation: pulse .7s infinite alternate; }
+  @keyframes pulse { to { transform: skewX(-6deg) scale(1.06); } }
+  #itemname { position: absolute; right: 16px; top: calc(12px + clamp(74px, 11vw, 104px) + 6px); font-size: clamp(11px, 1.6vw, 15px); text-align: right; width: 180px; }
+  #map { position: absolute; right: 14px; bottom: 14px; width: clamp(110px, 17vw, 180px); aspect-ratio: 1; background: rgba(10, 12, 30, .45); border-radius: 16px; border: 2px solid rgba(255, 255, 255, .22); }
+  #gauge { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(300px, 40vw); text-align: center; }
+  #speed { font-size: clamp(18px, 3vw, 28px); }
+  #speed small { font-size: .5em; opacity: .8; }
+  #bar { height: 10px; border-radius: 6px; background: rgba(0, 0, 0, .5); border: 2px solid rgba(255, 255, 255, .3); overflow: hidden; transform: skewX(-18deg); }
+  #bar i { display: block; height: 100%; width: 0; background: #cfd8e0; }
+  #toast { position: absolute; left: 50%; top: 26%; transform: translate(-50%, -50%) skewX(-8deg); font-size: clamp(22px, 5vw, 46px); color: var(--y); white-space: nowrap; opacity: 0; }
+  #toast.show { animation: toast 1.3s ease-out forwards; }
+  @keyframes toast { 0% { opacity: 0; transform: translate(-50%, -50%) skewX(-8deg) scale(2.2); } 12% { opacity: 1; transform: translate(-50%, -50%) skewX(-8deg) scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -80%) skewX(-8deg) scale(1); } }
+  #count { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); font-size: clamp(90px, 22vw, 220px); color: var(--o); }
+  #count.pop { animation: pop .8s ease-out; }
+  @keyframes pop { 0% { transform: translate(-50%, -50%) scale(2.6); opacity: 0; } 25% { transform: translate(-50%, -50%) scale(1); opacity: 1; } 100% { opacity: .9; } }
+  #wrong { position: absolute; left: 50%; top: 38%; transform: translateX(-50%); font-size: clamp(20px, 4vw, 38px); color: #ff4a4a; display: none; animation: blink .5s infinite alternate; }
+  @keyframes blink { to { opacity: .3; } }
+  #flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+  #help { position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%); font: 600 12px system-ui, sans-serif; opacity: .8; background: rgba(0, 0, 0, .45); padding: 5px 10px; border-radius: 8px; white-space: nowrap; }
+  .touch #help { display: none; }
+
+  /* commandes tactiles */
+  #touch { position: fixed; inset: 0; display: none; pointer-events: none; }
+  .touch #touch.on { display: block; }
+  .tb { position: absolute; pointer-events: auto; border-radius: 50%; display: grid; place-items: center; background: rgba(15, 18, 40, .42); border: 3px solid rgba(255, 255, 255, .55); color: #fff; font-size: 22px; backdrop-filter: blur(2px); }
+  .tb.down { background: rgba(255, 170, 40, .7); transform: scale(.94); }
+  #tL, #tR { width: 84px; height: 84px; bottom: 26px; font-size: 34px; }
+  #tL { left: 18px; } #tR { left: 118px; }
+  #tGas { right: 18px; bottom: 22px; width: 92px; height: 92px; border-color: #7dff9a; font-size: 15px; }
+  #tDrift { right: 122px; bottom: 16px; width: 82px; height: 82px; border-color: var(--b); font-size: 13px; }
+  #tBrake { right: 34px; bottom: 124px; width: 58px; height: 58px; font-size: 11px; border-color: #ff8080; }
+  #tItem { right: 116px; bottom: 108px; width: 70px; height: 70px; border-color: var(--y); font-size: 12px; }
+  .touch #map { bottom: auto; top: 12px; right: calc(16px + clamp(74px, 11vw, 104px) + 12px); width: 88px; }
+  .touch #pos { bottom: auto; top: 64px; font-size: 54px; }
+  .touch #gauge { bottom: 8px; width: min(220px, 30vw); }
+  .touch #itemname { display: none; }
+  #pauseBtn { position: absolute; left: 50%; top: 52px; transform: translateX(-50%); pointer-events: auto; font-size: 12px; padding: 5px 12px; border-radius: 999px; background: rgba(10, 12, 30, .55); border: 2px solid rgba(255, 255, 255, .3); color: #fff; font-family: inherit; }
+
+  /* écrans */
+  .screen { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 20px; text-align: center; background: radial-gradient(ellipse at 50% 30%, rgba(40, 60, 140, .55), rgba(6, 8, 22, .88)); overflow: auto; }
+  .screen.on { display: flex; }
+  h1 { margin: 0; font-size: clamp(44px, 10vw, 110px); line-height: .92; letter-spacing: -2px; background: linear-gradient(180deg, #fff6b8 10%, #ffd23a 45%, #ff7a12 85%); -webkit-background-clip: text; background-clip: text; color: transparent; font-style: italic; filter: drop-shadow(4px 4px 0 #14121c) drop-shadow(0 0 26px rgba(255, 170, 30, .55)); transform: skewX(-6deg); }
+  h2 { margin: 0; font-size: clamp(15px, 2.6vw, 24px); color: var(--b); letter-spacing: 3px; }
+  .btn { pointer-events: auto; cursor: pointer; font-family: inherit; font-style: italic; font-size: clamp(16px, 2.6vw, 24px); color: var(--ink); padding: 12px 30px; border: 3px solid var(--ink); border-radius: 12px; background: linear-gradient(180deg, #ffe46a, #ff9a1c); transform: skewX(-8deg); box-shadow: 5px 5px 0 var(--ink); transition: transform .08s; min-width: 250px; }
+  .btn:hover, .btn:focus-visible { transform: skewX(-8deg) translate(-2px, -2px) scale(1.03); outline: none; }
+  .btn.alt { background: linear-gradient(180deg, #b6f1ff, #48b8ff); min-width: 0; padding: 9px 18px; font-size: clamp(13px, 2vw, 18px); }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .hint { font: 500 13px/1.5 system-ui, sans-serif; opacity: .85; max-width: 720px; }
+  .hint b { color: var(--y); }
+  table { border-collapse: collapse; font-size: clamp(14px, 2.4vw, 22px); font-style: italic; min-width: min(560px, 92vw); }
+  td { padding: 6px 14px; text-align: left; background: rgba(10, 12, 30, .6); border-bottom: 2px solid rgba(255, 255, 255, .12); }
+  td:first-child { color: var(--y); width: 2.4em; } td.n { text-align: right; font-family: ui-monospace, monospace; font-style: normal; font-weight: 700; }
+  tr.me td { background: rgba(255, 150, 30, .4); }
+  #loading { font-size: 18px; color: var(--b); }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="hud">
+  <div id="lapbox" class="ink">TOUR <b id="lap">1</b>/3<div id="time">0:00.00</div></div>
+  <div id="orbs"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <button id="pauseBtn">❚❚ PAUSE</button>
+  <div id="itembox"><span id="itemicon"></span></div>
+  <div id="itemname" class="ink"></div>
+  <canvas id="map" width="360" height="360"></canvas>
+  <div id="pos" class="ink">1<small>/6</small></div>
+  <div id="gauge"><div id="speed" class="ink">0 <small>km/h</small></div><div id="bar"><i></i></div></div>
+  <div id="help">↑ accélérer · ←→ tourner · ESPACE dérapage / figure en l'air · MAJ ou E bonus · R replacer · P pause</div>
+  <div id="toast" class="ink"></div>
+  <div id="count" class="ink"></div>
+  <div id="wrong" class="ink">◀ SENS INVERSE ▶</div>
+</div>
+<div id="flash"></div>
+
+<div id="touch">
+  <div class="tb" id="tL">◀</div><div class="tb" id="tR">▶</div>
+  <div class="tb" id="tGas">GAZ</div><div class="tb" id="tDrift">DRIFT</div>
+  <div class="tb" id="tBrake">FREIN</div><div class="tb" id="tItem">BONUS</div>
+</div>
+
+<div class="screen on" id="menu">
+  <h2>GRAND PRIX DES SEPT ORBES</h2>
+  <h1>KI RACERS</h1>
+  <div id="loading">Chargement des karts…</div>
+  <div id="menuBtns" style="display:none; flex-direction:column; gap:14px; align-items:center">
+    <button class="btn" id="bTour">🏆 TOURNOI · 3 CIRCUITS</button>
+    <div class="row" id="quick"></div>
+    <div class="hint">
+      <b>Clavier</b> — ↑/W accélérer · ↓/S freiner · ←→/A D tourner · <b>Espace</b> dérapage (maintenir puis relâcher = turbo), figure pendant un saut · <b>Maj / E</b> utiliser le bonus · R replacer · P pause<br>
+      <b>Mobile</b> — boutons tactiles à l'écran. Récupère les <b>7 orbes</b> pour obtenir le Vœu, emprunte les <b>raccourcis</b> à tes risques et périls.
+    </div>
+  </div>
+</div>
+
+<div class="screen" id="results">
+  <h2 id="resSub"></h2>
+  <h1 id="resTitle" style="font-size:clamp(34px,7vw,72px)"></h1>
+  <table id="resTable"></table>
+  <div class="row"><button class="btn" id="bNext"></button><button class="btn alt" id="bMenu">MENU</button></div>
+</div>
+
+<div class="screen" id="pause">
+  <h1 style="font-size:clamp(40px,8vw,84px)">PAUSE</h1>
+  <div class="row"><button class="btn" id="bResume">REPRENDRE</button><button class="btn alt" id="bRestart">RECOMMENCER</button><button class="btn alt" id="bQuit">MENU</button></div>
+</div>
+
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
